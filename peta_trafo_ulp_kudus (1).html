@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Peta Trafo PLN ULP Kudus Kota</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', sans-serif; background: #0f1923; color: #e2e8f0; height: 100vh; display: flex; flex-direction: column; }
+
+  #header {
+    background: #1a2535; border-bottom: 2px solid #f59e0b;
+    padding: 10px 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+  }
+  #header .logo { width: 36px; height: 36px; background: #f59e0b; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; color: #0f1923; flex-shrink:0; }
+  #header h1 { font-size: 15px; font-weight: 700; color: #f8fafc; letter-spacing: 0.5px; }
+  #header p { font-size: 11px; color: #94a3b8; }
+  #header .stats { margin-left: auto; display: flex; gap: 16px; align-items: center; }
+  #header .stat { text-align: center; }
+  #header .stat-val { font-size: 20px; font-weight: 700; color: #f59e0b; }
+  #header .stat-lbl { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  #btn-locate {
+    position: absolute; bottom: 100px; right: 12px; z-index: 1000;
+    width: 44px; height: 44px; border-radius: 50%;
+    background: #1a2535; border: 2px solid #2d3f55;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.6); transition: all 0.2s;
+  }
+  #btn-locate:hover { border-color: #38bdf8; background: #0c2233; transform: scale(1.05); }
+  #btn-locate.locating { border-color: #f59e0b; }
+  #btn-locate.located { border-color: #38bdf8; background: #0c2233; }
+  #btn-locate.error { border-color: #f87171; }
+  #btn-locate svg { width: 22px; height: 22px; transition: all 0.3s; }
+  #btn-locate.locating svg { animation: spin 1s linear infinite; }
+  @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+
+  #main { display: flex; flex: 1; overflow: hidden; }
+
+  #sidebar { width: 300px; background: #1a2535; display: flex; flex-direction: column; border-right: 1px solid #2d3f55; flex-shrink: 0; overflow: hidden; }
+  #sidebar-top { padding: 12px; border-bottom: 1px solid #2d3f55; }
+  #search { width: 100%; padding: 8px 12px; background: #0f1923; border: 1px solid #2d3f55; border-radius: 6px; color: #e2e8f0; font-size: 13px; outline: none; }
+  #search:focus { border-color: #f59e0b; }
+  #search::placeholder { color: #475569; }
+  .filter-row { display: flex; gap: 6px; margin-top: 8px; }
+  .filter-btn { flex: 1; padding: 5px 8px; font-size: 11px; border: 1px solid #2d3f55; border-radius: 4px; background: #0f1923; color: #94a3b8; cursor: pointer; transition: all 0.15s; }
+  .filter-btn.active { background: #f59e0b; color: #0f1923; border-color: #f59e0b; font-weight: 700; }
+
+  #trafo-list { flex: 1; overflow-y: auto; }
+  #trafo-list::-webkit-scrollbar { width: 4px; }
+  #trafo-list::-webkit-scrollbar-track { background: #0f1923; }
+  #trafo-list::-webkit-scrollbar-thumb { background: #2d3f55; border-radius: 2px; }
+
+  .trafo-item { padding: 10px 14px; border-bottom: 1px solid #1e2e42; cursor: pointer; transition: background 0.1s; }
+  .trafo-item:hover { background: #243045; }
+  .trafo-item.selected { background: #1e3a5f; border-left: 3px solid #f59e0b; }
+  .trafo-id { font-size: 12px; font-weight: 700; color: #f8fafc; }
+  .trafo-meta { font-size: 11px; color: #64748b; margin-top: 2px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 700; }
+  .badge-PU { background: #1e3a5f; color: #60a5fa; }
+  .badge-MP { background: #3a1e2d; color: #f472b6; }
+  .badge-3ph { background: #1a2e1a; color: #4ade80; }
+  .badge-1ph { background: #2e2a1a; color: #fbbf24; }
+  .dist-tag { color: #38bdf8; font-size: 10px; font-weight: 600; }
+
+  #no-result { padding: 20px; text-align: center; color: #475569; font-size: 13px; display: none; }
+  #map { flex: 1; }
+
+  /* POPUP */
+  .popup-box { font-family: 'Segoe UI', sans-serif; min-width: 240px; }
+  .popup-title { font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 8px; border-bottom: 2px solid #f59e0b; padding-bottom: 6px; }
+  .popup-row { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; font-size: 12px; }
+  .popup-label { color: #64748b; }
+  .popup-value { font-weight: 600; color: #1e293b; text-align: right; }
+  .popup-gd { margin-top: 6px; padding: 4px 8px; background: #f1f5f9; border-radius: 4px; font-size: 11px; color: #475569; font-family: monospace; }
+  .popup-dist { margin-top: 8px; padding: 6px 10px; background: #e0f2fe; border-radius: 5px; font-size: 12px; color: #0369a1; font-weight: 700; }
+  .popup-nav { display: block; width: 100%; margin-top: 8px; padding: 8px; background: #16a34a; color: #fff; border: none; border-radius: 5px; font-size: 12px; font-weight: 700; cursor: pointer; text-align: center; text-decoration: none; }
+  .popup-nav:hover { background: #15803d; }
+  .popup-nav2 { display: block; width: 100%; margin-top: 5px; padding: 8px; background: #1d4ed8; color: #fff; border: none; border-radius: 5px; font-size: 12px; font-weight: 700; cursor: pointer; text-align: center; text-decoration: none; }
+  .popup-nav2:hover { background: #1e40af; }
+
+  /* GPS DOT ON MAP */
+  .my-gps-wrap { position: relative; width: 44px; height: 44px; }
+  .my-gps-ring { position: absolute; top: 0; left: 0; width: 44px; height: 44px; border-radius: 50%; background: rgba(56,189,248,0.18); animation: ring-out 2s ease-out infinite; }
+  .my-gps-core { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 16px; height: 16px; border-radius: 50%; background: #38bdf8; border: 2.5px solid #fff; }
+  @keyframes ring-out { 0%{transform:scale(0.4);opacity:1} 100%{transform:scale(1.8);opacity:0} }
+
+  #legend { position: absolute; bottom: 24px; left: 10px; background: #1a2535ee; border: 1px solid #2d3f55; border-radius: 8px; padding: 10px 12px; z-index: 1000; font-size: 11px; }
+  #legend h4 { color: #94a3b8; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; color: #cbd5e1; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+
+  #gps-toast { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); background: #0c2233ee; border: 1px solid #38bdf8; border-radius: 20px; padding: 7px 18px; z-index: 1001; font-size: 12px; color: #38bdf8; display: none; pointer-events: none; white-space: nowrap; }
+
+  #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: #1a2535; border: 1px solid #f59e0b; border-radius: 8px; padding: 20px 32px; z-index: 2000; text-align: center; font-size: 14px; color: #94a3b8; }
+
+  @media (max-width: 640px) {
+    #sidebar { width: 100%; height: 220px; }
+    #main { flex-direction: column; }
+    #btn-locate { bottom: 16px; right: 16px; }
+    #legend { bottom: 16px; left: 16px; }
+    #gps-toast { bottom: 72px; }
+    #header p { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div class="logo">PLN</div>
+  <div>
+    <h1>Peta Trafo ULP Kudus Kota</h1>
+    <p>PT PLN (Persero) UP3 Kudus</p>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="stat-val" id="cnt-total">-</div><div class="stat-lbl">Total Trafo</div></div>
+    <div class="stat"><div class="stat-val" id="cnt-shown">-</div><div class="stat-lbl">Ditampilkan</div></div>
+  </div>
+</div>
+
+<div id="main">
+  <div id="sidebar">
+    <div id="sidebar-top">
+      <input id="search" type="text" placeholder="Cari ID Trafo, No GD, Merk...">
+      <div class="filter-row">
+        <button class="filter-btn active" data-filter="all">Semua</button>
+        <button class="filter-btn" data-filter="PU">PU</button>
+        <button class="filter-btn" data-filter="MP">MP</button>
+        <button class="filter-btn" data-filter="3ph">3 Fasa</button>
+      </div>
+    </div>
+    <div id="trafo-list"></div>
+    <div id="no-result">Tidak ada trafo ditemukan</div>
+  </div>
+  <div id="map"></div>
+  <button id="btn-locate" onclick="locateMe()" title="Lokasi Saya">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="12" cy="12" r="3" fill="#38bdf8"/>
+      <circle cx="12" cy="12" r="6" stroke="#38bdf8" stroke-width="1.5" fill="none"/>
+      <line x1="12" y1="2" x2="12" y2="6" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="12" y1="18" x2="12" y2="22" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="2" y1="12" x2="6" y2="12" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="18" y1="12" x2="22" y2="12" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+  </button>
+</div>
+
+<div id="legend">
+  <h4>Kapasitas (kVA)</h4>
+  <div class="legend-item"><div class="legend-dot" style="background:#60a5fa"></div>&lt; 100 kVA</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#4ade80"></div>100 – 500 kVA</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>500 – 999 kVA</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f472b6"></div>&ge; 1000 kVA</div>
+</div>
+
+<div id="gps-toast"></div>
+<div id="loading">Memuat data trafo...</div>
+
+<script>
+// ===== KONFIGURASI =====
+const SHEET_URL = '';  // ISI URL GOOGLE SHEETS DI SINI
+const COL = { ID:0, LAT:1, LNG:2, MERK:3, KVA:4, FASA:5, JENIS:6, KET:7, GD:8 };
+const BUKAN_TRAFO = ['ABSW','FCO','REC','LBS','RECLOSER'];
+
+// ===== MAP =====
+const map = L.map('map').setView([-6.835, 110.838], 14);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap contributors', maxZoom: 19
+}).addTo(map);
+
+// ===== GPS =====
+let myLat = null, myLng = null;
+let gpsMarker = null, accCircle = null, gpsWatchId = null;
+
+function locateMe() {
+  if (!navigator.geolocation) { toast('GPS tidak didukung browser ini', true); return; }
+  const btn = document.getElementById('btn-locate');
+
+  // Jika sudah ada lokasi → langsung fly to tanpa request ulang
+  if (myLat !== null) {
+    map.flyTo([myLat, myLng], 17, { duration: 1 });
+    if (gpsMarker) gpsMarker.openPopup();
+    return;
+  }
+
+  // Pertama kali → minta GPS
+  btn.className = 'locating';
+  toast('Mencari lokasi GPS...');
+
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      myLat = pos.coords.latitude;
+      myLng = pos.coords.longitude;
+      const acc = Math.round(pos.coords.accuracy);
+      btn.className = 'located';
+      toast(`Lokasi ditemukan — akurasi \u00b1${acc} m`);
+
+      const icon = L.divIcon({
+        className: '',
+        html: `<div class="my-gps-wrap"><div class="my-gps-ring"></div><div class="my-gps-core"></div></div>`,
+        iconSize:[44,44], iconAnchor:[22,22], popupAnchor:[0,-22]
+      });
+
+      if (gpsMarker) map.removeLayer(gpsMarker);
+      gpsMarker = L.marker([myLat, myLng], { icon, zIndexOffset:2000 })
+        .addTo(map)
+        .bindPopup(`<b style="font-family:Segoe UI;font-size:13px">Lokasi Anda</b><br><small style="color:#64748b;font-family:monospace">${myLat.toFixed(6)}, ${myLng.toFixed(6)}</small>`);
+
+      if (accCircle) map.removeLayer(accCircle);
+      accCircle = L.circle([myLat, myLng], {
+        radius: acc, color:'#38bdf8', fillColor:'#38bdf8', fillOpacity:0.07, weight:1
+      }).addTo(map);
+
+      map.flyTo([myLat, myLng], 17, { duration: 1.2 });
+      gpsMarker.openPopup();
+      renderList(getFiltered());
+
+      // Lanjutkan watch agar titik ikut bergerak
+      if (gpsWatchId) navigator.geolocation.clearWatch(gpsWatchId);
+      gpsWatchId = navigator.geolocation.watchPosition(pos2 => {
+        myLat = pos2.coords.latitude; myLng = pos2.coords.longitude;
+        const a2 = Math.round(pos2.coords.accuracy);
+        if (gpsMarker) gpsMarker.setLatLng([myLat, myLng]);
+        if (accCircle) accCircle.setLatLng([myLat, myLng]).setRadius(a2);
+        renderList(getFiltered());
+      }, null, { enableHighAccuracy:true, maximumAge:5000 });
+    },
+    err => {
+      btn.className = 'error';
+      let msg = '';
+      if (err.code === 1) msg = 'Izin GPS ditolak — buka via HTTPS (GitHub Pages)';
+      else if (err.code === 2) msg = 'Sinyal GPS lemah, coba di luar ruangan';
+      else msg = 'GPS timeout — coba lagi';
+      toast(msg, true);
+      setTimeout(() => { btn.className = ''; }, 4000);
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+}
+
+let toastTimer = null;
+function toast(msg, isErr) {
+  const el = document.getElementById('gps-toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  el.style.borderColor = isErr ? '#f87171' : '#38bdf8';
+  el.style.color = isErr ? '#f87171' : '#38bdf8';
+  if (toastTimer) clearTimeout(toastTimer);
+  if (isErr) toastTimer = setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+// ===== HAVERSINE =====
+function dist(lat1, lng1, lat2, lng2) {
+  const R = 6371000, dL = (lat2-lat1)*Math.PI/180, dG = (lng2-lng1)*Math.PI/180;
+  const a = Math.sin(dL/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dG/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+function fmtDist(m) { return m < 1000 ? `${Math.round(m)} m` : `${(m/1000).toFixed(2)} km`; }
+
+// ===== ICON =====
+function getColor(kva) {
+  const v = parseInt(kva)||0;
+  if (v>=1000) return '#f472b6';
+  if (v>=500)  return '#f59e0b';
+  if (v>=100)  return '#4ade80';
+  return '#60a5fa';
+}
+function makeIcon(kva) {
+  const c = getColor(kva);
+  return L.divIcon({
+    className: '',
+    html: `<svg width="14" height="14" viewBox="0 0 14 14" xmlns="http://www.w3.org/2000/svg"><circle cx="7" cy="7" r="6" fill="${c}" stroke="#0f1923" stroke-width="1.5"/></svg>`,
+    iconSize:[14,14], iconAnchor:[7,7], popupAnchor:[0,-8]
+  });
+}
+
+// ===== POPUP =====
+function buildPopup(t) {
+  const d = (myLat !== null) ? dist(myLat, myLng, t.lat, t.lng) : null;
+  const distHtml = d !== null
+    ? `<div class="popup-dist">&#128205; ${fmtDist(d)} dari lokasi Anda</div>` : '';
+  const navHtml = d !== null
+    ? `<a class="popup-nav" href="https://maps.google.com/maps?saddr=${myLat},${myLng}&daddr=${t.lat},${t.lng}" target="_blank">&#128663; Navigasi ke Trafo Ini</a>
+       <a class="popup-nav2" href="https://maps.google.com/?q=${t.lat},${t.lng}" target="_blank">&#128205; Lihat di Google Maps</a>`
+    : `<a class="popup-nav2" href="https://maps.google.com/?q=${t.lat},${t.lng}" target="_blank">&#128205; Lihat di Google Maps</a>`;
+
+  return `<div class="popup-box">
+    <div class="popup-title">${t.id}</div>
+    <div class="popup-row"><span class="popup-label">Merk</span><span class="popup-value">${t.merk}</span></div>
+    <div class="popup-row"><span class="popup-label">Kapasitas</span><span class="popup-value">${t.kva} kVA</span></div>
+    <div class="popup-row"><span class="popup-label">Fasa</span><span class="popup-value">${t.fasa==='3'?'3 Fasa':'1 Fasa'}</span></div>
+    <div class="popup-row"><span class="popup-label">Jenis</span><span class="popup-value">${t.jenis}</span></div>
+    <div class="popup-row"><span class="popup-label">Keterangan</span><span class="popup-value">${t.ket}</span></div>
+    <div class="popup-gd">No GD: ${t.gd}</div>
+    ${distHtml}
+    ${navHtml}
+  </div>`;
+}
+
+// ===== DATA =====
+let allData = [], markers = {}, activeFilter = 'all', selectedId = null;
+
+function isBukanTrafo(id) {
+  const u = (id||'').toUpperCase().trim();
+  return BUKAN_TRAFO.some(p => u.startsWith(p));
+}
+
+function parseCSV(text) {
+  const data = [];
+  for (let r of text.trim().split('\n')) {
+    const cols = r.split('\t').map(c => c.trim().replace(/^"|"$/g,''));
+    if (cols.length < 3) continue;
+    const id = cols[COL.ID]||'';
+    if (!id || isBukanTrafo(id)) continue;
+    const lat = parseFloat(cols[COL.LAT]), lng = parseFloat(cols[COL.LNG]);
+    if (isNaN(lat)||isNaN(lng)) continue;
+    data.push({ id, lat, lng, merk:cols[COL.MERK]||'-', kva:cols[COL.KVA]||'-',
+      fasa:cols[COL.FASA]||'-', jenis:cols[COL.JENIS]||'-', ket:cols[COL.KET]||'-', gd:cols[COL.GD]||'-' });
+  }
+  return data;
+}
+
+function renderList(data) {
+  const list = document.getElementById('trafo-list');
+  const noRes = document.getElementById('no-result');
+  list.innerHTML = '';
+  if (!data.length) { noRes.style.display='block'; return; }
+  noRes.style.display = 'none';
+  document.getElementById('cnt-shown').textContent = data.length;
+
+  let sorted = [...data];
+  if (myLat !== null) sorted.sort((a,b) => dist(myLat,myLng,a.lat,a.lng) - dist(myLat,myLng,b.lat,b.lng));
+
+  sorted.forEach(t => {
+    const d = myLat !== null ? dist(myLat,myLng,t.lat,t.lng) : null;
+    const div = document.createElement('div');
+    div.className = 'trafo-item' + (t.id===selectedId?' selected':'');
+    div.innerHTML = `<div class="trafo-id">${t.id}</div>
+      <div class="trafo-meta">
+        <span>${t.merk}</span>
+        <span>&#9889; ${t.kva} kVA</span>
+        <span class="badge badge-${t.jenis}">${t.jenis}</span>
+        <span class="badge badge-${t.fasa==='3'?'3ph':'1ph'}">${t.fasa==='3'?'3 Fasa':'1 Fasa'}</span>
+        ${d!==null?`<span class="dist-tag">&#128205; ${fmtDist(d)}</span>`:''}
+      </div>`;
+    div.onclick = () => flyTo(t);
+    list.appendChild(div);
+  });
+}
+
+function flyTo(t) {
+  selectedId = t.id;
+  map.flyTo([t.lat,t.lng], 17, { duration: 0.8 });
+  if (markers[t.id]) { markers[t.id].setPopupContent(buildPopup(t)); markers[t.id].openPopup(); }
+  renderList(getFiltered());
+  document.querySelectorAll('.trafo-item').forEach(el => {
+    if (el.querySelector('.trafo-id').textContent === t.id)
+      el.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  });
+}
+
+function getFiltered() {
+  const q = document.getElementById('search').value.toLowerCase().trim();
+  return allData.filter(t => {
+    const mf = activeFilter==='all'?true : activeFilter==='PU'?t.jenis==='PU' : activeFilter==='MP'?t.jenis==='MP' : activeFilter==='3ph'?t.fasa==='3':true;
+    const mq = !q || t.id.toLowerCase().includes(q) || t.gd.toLowerCase().includes(q) || t.merk.toLowerCase().includes(q) || t.kva.includes(q);
+    return mf && mq;
+  });
+}
+
+function renderMap(data) {
+  Object.values(markers).forEach(m => map.removeLayer(m));
+  markers = {};
+  data.forEach(t => {
+    const m = L.marker([t.lat,t.lng], { icon:makeIcon(t.kva) }).addTo(map).bindPopup(buildPopup(t), { maxWidth:280 });
+    m.on('click', () => { selectedId=t.id; m.setPopupContent(buildPopup(t)); renderList(getFiltered()); });
+    markers[t.id] = m;
+  });
+}
+
+function refresh() { const d=getFiltered(); renderList(d); renderMap(d); }
+
+document.getElementById('search').addEventListener('input', refresh);
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active'); activeFilter=btn.dataset.filter; refresh();
+  });
+});
+
+// ===== LOAD DATA =====
+async function loadData() {
+  let raw = '';
+  if (SHEET_URL) {
+    try { raw = await (await fetch(SHEET_URL)).text(); }
+    catch(e) { alert('Gagal mengambil data Google Sheets.\nPastikan URL benar dan sheet sudah di-publish.'); document.getElementById('loading').remove(); return; }
+  } else {
+    raw = `K1-17\t-6.83269900\t110.82642000\tTRAFINDO\t050\t1\tPU\tA\tGD520012179
+K1-22\t-6.83125500\t110.82786000\tBAMBANG DJAJA\t050\t1\tPU\tA\tGD520012180
+K1-27 520010047222\t-6.82895230\t110.83024000\tTRAFINDO\t1250\t3\tMP\t1\tGD520012181
+K1-28 520010194563\t-6.82848700\t110.83075000\tUNINDO\t300\t3\tMP\t1\tGD520012182
+K1-32 52000\t-6.82729050\t110.83184000\tBAMBANG DJAJA\t050\t1\tPU\tA\tGD520012183
+K1-32-5-1\t-6.82607800\t110.83007000\tBAMBANG DJAJA\t050\t1\tPU\tA\tGD520012184
+K1-32-12\t-6.82704930\t110.82784000\tBAMBANG DJAJA\t050\t1\tPU\tA\tGD520012185
+K1-32-13-3.1\t-6.82540560\t110.82771000\tSINTRA\t050\t1\tPU\tA\tGD520012186
+K1-32-13-3.2\t-6.82540560\t110.82771000\tTRAFINDO\t050\t1\tPU\tA\tGD520012187
+K1-32-15\t-6.82619140\t110.82662000\tSINTRA\t050\t1\tPU\tA\tGD520012188
+K1-32-15-4.1\t-6.82797150\t110.82612000\tBAMBANG DJAJA\t050\t1\tPU\tA\tGD520012211
+K1-32-15-4.2\t-6.82797150\t110.82612000\tTRAFINDO\t050\t1\tPU\tA\tGD520012212
+K1-32-15-9\t-6.82878400\t110.82557000\tBAMBANG DJAJA\t050\t1\tPU\tA\tGD520013011
+K1-32-16\t-6.82613660\t110.82609600\tSTARLITE\t050\t1\tPU\tA\tGD520013013
+K1-32-17\t-6.82600700\t110.82558400\tTRAFINDO\t050\t1\tPU\tA\tGD520013015`;
+  }
+
+  allData = parseCSV(raw);
+  document.getElementById('cnt-total').textContent = allData.length;
+  document.getElementById('cnt-shown').textContent = allData.length;
+  renderList(allData); renderMap(allData);
+  document.getElementById('loading').remove();
+
+  if (allData.length > 0) {
+    const lats = allData.map(t=>t.lat), lngs = allData.map(t=>t.lng);
+    map.fitBounds([[Math.min(...lats),Math.min(...lngs)],[Math.max(...lats),Math.max(...lngs)]], { padding:[40,40] });
+  }
+}
+
+loadData();
+</script>
+</body>
+</html>
